@@ -46,22 +46,39 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 // OR for the ST7789-based displays, we will use this call
 //Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
-// Configuration
-const int arraySize = 128;    // Number of data points
-const int inputPin = A1;      // Analog input pin
-int dataArray[arraySize];     // Array to store input values
 
-const float frequency = 1.0; // Frequency of the sine wave
-const int amplitude = 512;   // Amplitude of the sine wave (0-1023 range)
-const int offset = 512;      // Center of the sine wave (0-1023 range)
+// Configuration
+const int arraySize = 128;            // Number of data points
+const int inputPin = A1;              // Analog input pin
+int readValue = analogRead(inputPin); // asign analog input
+int dataArray[arraySize];             // Array to store input values
+int userIntputLimit = 150;            // used to detect user input to break waitForInput
+
+const float frequency = 2.0; // Frequency of the sine wave
+const int amplitude = 128;   // Amplitude of the sine wave (0-1023 range)
+const int offset = 0;      // Center of the sine wave (0-1023 range)
+
+// display params
+const uint16_t backgroundColor = ST77XX_WHITE;
+const uint16_t textColor = ST77XX_BLACK;
+int screenWidth;    // Get the display width (landscape mode)
+int screenHeight;   // Get the display height (landscape mode)
+int centerY;        // Vertical center of the display
+int centerX;        // Vertical center of the display
+int scaleY;         // Map analog input to display height
 
 void readAndPlotInput();
 void shiftAndAdd(int);
 void init_dataArray();
+void waitForInput();
+void plotParams();
 
 void setup(void) {
   Serial.begin(9600);
-  Serial.print(F("Hello! ST77xx TFT Test"));
+  Serial.print("Width: ");
+  Serial.println(tft.width());
+  Serial.print("Height: ");
+  Serial.println(tft.height());
 
   // Use this initializer if using a 1.8" TFT screen:
   //tft.initR(INITR_BLACKTAB);      // Init ST7735S chip, black tab
@@ -70,11 +87,16 @@ void setup(void) {
   // tft.initR(INITR_GREENTAB);      // Init ST7735S chip, green tab
 
   // OR use this initializer (uncomment) if using a 1.44" TFT:
-  tft.initR(INITR_144GREENTAB);   // Init ST7735R chip, green tab
-  tft.setRotation(1);             // Set rotation: 0 = portrait, 1 = landscape
-  tft.fillScreen(ST77XX_BLACK);   // Clear screen
-  tft.setTextColor(ST77XX_WHITE); // Set text color
+  tft.initR(INITR_144GREENTAB);       // Init ST7735R chip, green tab
+  tft.setRotation(0);                 // Set rotation: 0 = portrait, 1 = landscape
+  tft.fillScreen(backgroundColor);    // Clear screen
+  tft.setTextColor(textColor);        // Set text color
 
+  screenWidth = tft.width();          // Get the display width (landscape mode)
+  screenHeight = tft.height();        // Get the display height (landscape mode)
+  centerY = screenHeight / 2;         // Vertical center of the display
+  centerX = screenWidth / 2;          // Vertical center of the display
+  scaleY = screenHeight / 100;        // Map analog input to display height
   
   // SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here
   // Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
@@ -100,14 +122,16 @@ void setup(void) {
 
   // Initialize array
   init_dataArray();
+  plotParams();
+  waitForInput();
 }
 
 void loop() {  
 
   // Clear the screen
-  tft.fillScreen(ST77XX_BLACK);
+  tft.fillScreen(backgroundColor);
   readAndPlotInput();
-  delay(50); // Adjust for sampling rate
+  delay(500); // Adjust for sampling rate
 }
 
 void init_dataArray() {
@@ -117,23 +141,25 @@ void init_dataArray() {
   }
 }
 
+void shiftAndAdd(int value) {
+  // Shift all elements to the left
+  for (int i = 0; i < arraySize - 1; i++) {
+    dataArray[i] = dataArray[i + 1];
+  }
+  // Add new value to the end
+  dataArray[arraySize - 1] = value;
+}
 
 void readAndPlotInput() {
-  int screenWidth = tft.width();  // Get the display width (landscape mode)
-  int screenHeight = tft.height(); // Get the display height (landscape mode)
-  int centerY = screenHeight / 2;  // Vertical center of the display
-  int scaleY = screenHeight / 100; // Map analog input to display height
   
   // Read input and add to the array
-  int newValue = analogRead(inputPin); // Read analog input (0-1023 range)
-  shiftAndAdd(newValue);               // Shift array and add new value
+  readValue = analogRead(inputPin)/10; // Read analog input (0-1023 range)
+  shiftAndAdd(readValue);               // Shift array and add new value
 
 
   // Draw horizontal center line
-  tft.drawFastHLine(0, centerY, screenWidth, ST77XX_WHITE);
-
-  // Draw bounding box
-  tft.drawFastHLine(0, centerY, screenWidth, ST77XX_WHITE);
+  tft.drawFastVLine(centerX, 0, screenHeight, ST77XX_RED);
+  tft.drawFastHLine(0, centerY, screenWidth, ST77XX_RED);
 
   // Plot the data
   for (int i = 0; i < arraySize - 1; i++) {
@@ -145,11 +171,52 @@ void readAndPlotInput() {
   }
 }
 
-void shiftAndAdd(int newValue) {
-  // Shift all elements to the left
-  for (int i = 0; i < arraySize - 1; i++) {
-    dataArray[i] = dataArray[i + 1];
+void plotParams() {
+  tft.setCursor(0, 0);
+  tft.fillScreen(backgroundColor);
+  tft.setTextSize(1);
+  tft.print("Height");
+  tft.println(screenHeight);
+  tft.setCursor(0, 10);
+  tft.print("Width");
+  tft.println(screenWidth);
+  delay(5000);
+
+}
+
+// wait until the voltage input is changed by 5 or more
+void waitForInput() {
+  delay(100);
+  int initValue = analogRead(inputPin);
+  delay(100);
+  readValue = analogRead(inputPin);
+  int counter = 0;
+
+  int _x = screenWidth - 50;
+  int _y = screenHeight - 50;
+  
+  while(abs(initValue - readValue) < userIntputLimit) {
+    _x = screenWidth - 50;
+    _y = screenHeight - 50;
+    counter++;
+    readValue = analogRead(inputPin);
+
+    // Display the counter on the bottom-right corner
+    tft.setCursor(_x, _y); // Set cursor to bottom-right corner
+    tft.fillRect(_x, _y, 50, 50, backgroundColor); // Clear previous count
+    tft.setTextSize(1);
+    tft.println(counter);
+    _y+=10;
+    tft.setCursor(_x, _y); // Set cursor to bottom-right corner
+    tft.println(readValue);
+    _y+=10;
+    tft.setCursor(_x, _y); // Set cursor to bottom-right corner
+    tft.println(initValue);
+    _y+=10;
+    tft.setCursor(_x, _y); // Set cursor to bottom-right corner
+    tft.println(initValue - readValue);
+
+    delay(1000);
   }
-  // Add new value to the end
-  dataArray[arraySize - 1] = newValue;
+
 }
