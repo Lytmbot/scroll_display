@@ -61,11 +61,19 @@ const int offset = 0;      // Center of the sine wave (0-1023 range)
 // display params
 const uint16_t backgroundColor = ST77XX_WHITE;
 const uint16_t textColor = ST77XX_BLACK;
-int screenWidth;    // Get the display width (landscape mode)
-int screenHeight;   // Get the display height (landscape mode)
-int centerY;        // Vertical center of the display
-int centerX;        // Vertical center of the display
-int scaleY;         // Map analog input to display height
+int screenWidth;            // Get the display width (landscape mode)
+int screenHeight;           // Get the display height (landscape mode)
+int centerY;                // Vertical center of the display
+int centerX;                // Vertical center of the display
+int scaleY;                 // Map analog input to display height
+const int sampleRate = 100; // loop rate
+
+// Variables for tracking runtime and loop executions
+unsigned long loopStartTime;  // Time when each loop starts
+unsigned long loopTimeTotal = 0;  // Sum of loop execution times
+int loopCounter = 0;      // Counter for the number of times loop() has executed
+float avgLoopTime = 0.0;  // Average loop time in milliseconds
+
 
 void readAndPlotInput();
 void shiftAndAdd(int);
@@ -124,14 +132,31 @@ void setup(void) {
   init_dataArray();
   plotParams();
   waitForInput();
+  tft.fillScreen(backgroundColor); // Clear the screen
 }
 
-void loop() {  
+void loop() {    
+  loopStartTime = millis(); // Record the start time of the loop  
+  tft.fillScreen(backgroundColor); // Clear the screen
 
-  // Clear the screen
-  tft.fillScreen(backgroundColor);
+  if (loopCounter > 10) {  // Every 1000 ms (1 second)
+    tft.setCursor(0+5, 2);  // Adjust cursor for next line
+    tft.print("Avg Loop: ");
+    tft.print(avgLoopTime);  // Display average loop time in milliseconds
+    tft.println(" ms");
+  }
+
+  // main functionality
+  // --------------------------
   readAndPlotInput();
-  delay(500); // Adjust for sampling rate
+  delay(sampleRate); // Adjust for sampling rate
+  // --------------------------
+  
+  // Calculate the loop execution time and add it to the total time
+  loopTimeTotal += millis() - loopStartTime;  // Sum up loop times
+  loopCounter++;
+  // Calculate the average loop time
+  avgLoopTime = (float)loopTimeTotal / loopCounter;  
 }
 
 void init_dataArray() {
@@ -180,8 +205,6 @@ void plotParams() {
   tft.setCursor(0, 10);
   tft.print("Width");
   tft.println(screenWidth);
-  delay(5000);
-
 }
 
 // wait until the voltage input is changed by 5 or more
