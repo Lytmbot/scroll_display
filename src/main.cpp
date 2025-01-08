@@ -68,6 +68,10 @@ int centerX;                // Vertical center of the display
 int scaleY;                 // Map analog input to display height
 const int sampleRate = 100; // loop rate
 
+// plotting
+int yPrev0 = 0;
+int yPrev1 = 0;
+
 // Variables for tracking runtime and loop executions
 unsigned long loopStartTime;  // Time when each loop starts
 unsigned long loopTimeTotal = 0;  // Sum of loop execution times
@@ -137,14 +141,23 @@ void setup(void) {
 
 void loop() {    
   loopStartTime = millis(); // Record the start time of the loop  
-  tft.fillScreen(backgroundColor); // Clear the screen
 
-  if (loopCounter > 10) {  // Every 1000 ms (1 second)
-    tft.setCursor(0+5, 2);  // Adjust cursor for next line
+if (loopCounter > 10) {  // Every 1000 ms (1 second)
+    // Define the area to clear
+    int textX = 5;         // X-coordinate for text
+    int textY = 2;         // Y-coordinate for text
+    int textWidth = 126;    // Width of the rectangle (adjust to fit your text)
+    int textHeight = 10;   // Height of the rectangle (adjust to your text size)
+
+    // Clear the area with a rectangle filled with the background color
+    tft.fillRect(textX, textY, textWidth, textHeight, backgroundColor);
+
+    // Display the average loop time
+    tft.setCursor(textX, textY);  // Set cursor position
     tft.print("Avg Loop: ");
-    tft.print(avgLoopTime);  // Display average loop time in milliseconds
+    tft.print(avgLoopTime);       // Display average loop time in milliseconds
     tft.println(" ms");
-  }
+}
 
   // main functionality
   // --------------------------
@@ -176,7 +189,8 @@ void shiftAndAdd(int value) {
 }
 
 void readAndPlotInput() {
-  
+  static int previousData[arraySize]; // Store the previous data values to clear lines correctly
+
   // Read input and add to the array
   readValue = analogRead(inputPin)/10; // Read analog input (0-1023 range)
   shiftAndAdd(readValue);               // Shift array and add new value
@@ -188,11 +202,17 @@ void readAndPlotInput() {
 
   // Plot the data
   for (int i = 0; i < arraySize - 1; i++) {
-    int x1 = map(i, 0, arraySize - 1, 0, screenWidth);  // Scale index to width
-    int y1 = centerY - (dataArray[i] * scaleY);         // Scale data to height
-    int x2 = map(i + 1, 0, arraySize - 1, 0, screenWidth);
-    int y2 = centerY - (dataArray[i + 1] * scaleY);
-    tft.drawLine(x1, y1, x2, y2, ST77XX_RED);          // Draw line
+
+    int x0 = map(i, 0, arraySize - 1, 0, screenWidth);  // Scale index to width
+    int y0 = centerY - (dataArray[i] * scaleY);         // Scale data to height
+    int x1 = map(i + 1, 0, arraySize - 1, 0, screenWidth);
+    int y1 = centerY - (dataArray[i + 1] * scaleY);
+
+    tft.drawLine(x0, yPrev0, x1, yPrev1, backgroundColor);
+    tft.drawLine(x0, y0, x1, y1, ST77XX_RED);          // Draw line
+
+    yPrev0 = y0;
+    yPrev1 = y1;
   }
 }
 
